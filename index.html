@@ -88,6 +88,13 @@
     font-size: 14px; font-weight: 720; cursor: pointer;
   }
   #btn-start:disabled { opacity: .5; cursor: wait; }
+  #visitor-count {
+    margin-top: 16px;
+    min-height: 18px;
+    color: rgba(255,255,255,.38);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
   #err { min-height: 20px; margin-top: 12px !important; color: #ff9d9d !important; font-size: 12px !important; }
 
   #flash {
@@ -123,6 +130,7 @@
     <h1>Viral Instagram Hand Frame filter</h1>
     <p>Show your both index finger and thumb of both of your hands.</p>
     <button id="btn-start">Open camera</button>
+    <div id="visitor-count" aria-live="polite">— visitors</div>
     <p id="err"></p>
   </div>
 
@@ -1140,5 +1148,22 @@ $('#btn-record').addEventListener('click', e => {
   toggleRecording();
 });
 </script>
+
+<script>
+async function loadVisitorCount() {
+  try {
+    const response = await fetch('https://shubhgajjar.goatcounter.com/counter//.json', { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    const el = document.getElementById('visitor-count');
+    if (el && data.count) el.textContent = `${data.count} visitors`;
+  } catch {}
+}
+</script>
+<script
+  data-goatcounter="https://shubhgajjar.goatcounter.com/count"
+  async
+  onload="setTimeout(loadVisitorCount, 700)"
+  src="https://gc.zgo.at/count.js"></script>
 </body>
 </html>
