@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#050706" />
+<title>HandFrame — Cinematic Green + B&W</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --glass: rgba(8, 12, 10, 0.62);
+    --hairline: rgba(255,255,255,0.12);
+    --text: rgba(255,255,255,0.94);
+    --muted: rgba(255,255,255,0.56);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; margin: 0; overflow: hidden;
+    background: #000;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    user-select: none;
+  }
+  #wrap {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: #000;
+  }
+  canvas { display: block; max-width: 100%; max-height: 100%; }
+  video { display: none; }
+
+  #hud {
+    position: fixed; z-index: 5; top: max(14px, env(safe-area-inset-top)); left: 16px;
+    color: var(--text); pointer-events: none; text-shadow: 0 1px 5px rgba(0,0,0,.55);
+    font-size: 12px; line-height: 1.45;
+  }
+  #hud-top { display: flex; align-items: center; gap: 7px; }
+  #backend-badge {
+    padding: 3px 8px; border: 1px solid var(--hairline); border-radius: 999px;
+    background: rgba(0,0,0,.28); backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px); font-size: 10px; font-weight: 700; letter-spacing: .07em;
+  }
+  #hud-fps { color: var(--muted); font-variant-numeric: tabular-nums; }
+  #hud-status { margin-top: 4px; color: rgba(255,255,255,.66); }
+
+  #controls {
+    position: fixed; z-index: 7; left: 50%; bottom: max(18px, env(safe-area-inset-bottom));
+    transform: translateX(-50%); display: none; align-items: center; gap: 8px;
+    padding: 7px; border: 1px solid var(--hairline); border-radius: 999px;
+    background: var(--glass); backdrop-filter: blur(18px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    box-shadow: 0 12px 40px rgba(0,0,0,.38);
+  }
+  .icon-btn {
+    width: 42px; height: 42px; border: 0; border-radius: 50%; cursor: pointer;
+    display: grid; place-items: center; color: #fff; background: rgba(255,255,255,.08);
+    transition: transform .15s ease, background .15s ease;
+    font-size: 18px;
+  }
+  .icon-btn:active { transform: scale(.94); background: rgba(255,255,255,.16); }
+  #btn-record { font-size: 19px; }
+  #btn-record.recording {
+    background: rgba(210,34,54,.42);
+    box-shadow: 0 0 0 1px rgba(255,120,120,.18), 0 10px 24px rgba(210,34,54,.22);
+  }
+  #mode-pill {
+    height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 14px;
+    border-radius: 999px; background: rgba(255,255,255,.09); color: rgba(255,255,255,.92);
+    font-size: 12px; font-weight: 650; letter-spacing: .02em; cursor: pointer; border: 0;
+  }
+  #mode-dot { width: 7px; height: 7px; border-radius: 50%; background: #9fd7bf; box-shadow: 0 0 12px rgba(159,215,191,.55); }
+
+  #start {
+    position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 26px; text-align: center;
+    background:
+      radial-gradient(circle at 50% 34%, rgba(44, 83, 66, .28), transparent 36%),
+      linear-gradient(180deg, #090c0a 0%, #030403 100%);
+  }
+  #start .eyebrow { color: rgba(195,224,211,.74); font-size: 11px; letter-spacing: .16em; font-weight: 750; }
+  #start h1 { margin: 9px 0 8px; color: #f4f7f5; font-size: clamp(30px, 7vw, 54px); letter-spacing: -.045em; line-height: .98; }
+  #start p { margin: 0; max-width: 470px; color: rgba(255,255,255,.56); font-size: 14px; line-height: 1.55; }
+  #hint {
+    margin-top: 20px; max-width: 430px; padding: 13px 15px; border: 1px solid rgba(255,255,255,.09);
+    border-radius: 16px; background: rgba(255,255,255,.035); color: rgba(255,255,255,.7);
+    text-align: left; font-size: 12px; line-height: 1.5;
+  }
+  #btn-start {
+    margin-top: 22px; border: 1px solid rgba(255,255,255,.18); border-radius: 999px;
+    padding: 13px 22px; min-width: 170px; color: #0a110d; background: #eaf4ee;
+    font-size: 14px; font-weight: 760; cursor: pointer; box-shadow: 0 10px 30px rgba(0,0,0,.28);
+  }
+  #btn-start:disabled { opacity: .5; cursor: wait; }
+  #err { min-height: 20px; margin-top: 12px !important; color: #ff9d9d !important; font-size: 12px !important; }
+
+  #flash {
+    position: fixed; inset: 0; z-index: 30; pointer-events: none; background: #fff;
+    opacity: 0; transition: opacity .32s ease-out;
+  }
+
+  @media (max-width: 600px) {
+    #hud { left: 12px; }
+    #mode-pill { padding: 0 12px; }
+    .icon-btn { width: 40px; height: 40px; }
+    #mode-pill { height: 40px; }
+  }
+</style>
+</head>
+<body>
+  <div id="wrap"><canvas id="cv"></canvas></div>
+
+  <div id="hud">
+    <div id="hud-top"><span id="backend-badge">INIT</span><span id="hud-fps">0 FPS</span></div>
+    <div id="hud-status">Ready</div>
+  </div>
+
+  <div id="controls">
+    <button class="icon-btn" id="btn-camera" title="Switch camera" aria-label="Switch camera">↻</button>
+    <button id="mode-pill" title="Switch effect" aria-label="Switch effect"><span id="mode-dot"></span><span id="mode-label">CINEMATIC GREEN</span></button>
+    <button class="icon-btn" id="btn-record" title="Start recording" aria-label="Start recording">●</button>
+  </div>
+
+  <div id="flash"></div>
+
+  <div id="start">
+    <div class="eyebrow">HANDFRAME</div>
+    <h1>Portal Camera</h1>
+    <p>Four fingertips become the frame. Switch between Cinematic Green and a dramatic Black & White look, then record the effect directly.</p>
+    <div id="hint">Show <b>both hands</b>. Keep each <b>thumb tip</b> and <b>index fingertip</b> visible. The four points define the portal exactly.</div>
+    <button id="btn-start">Open camera</button>
+    <p id="err"></p>
+  </div>
+
+  <video id="video" playsinline muted autoplay></video>
+
+<script type="module">
+const $ = s => document.querySelector(s);
+const setErr = msg => $('#err').textContent = msg || '';
+
+const THUMB_TIP = 4;
+const IDX_TIP = 8;
+const WRIST = 0;
+
+const CFG = {
+  smoothAlpha: 0.45,
+  handsTimeout: 450,
+  minRenderScale: 0.66,
+  maxRenderScale: 1.0,
+};
+
+let facingMode = 'user';
+let activeBackend = 'none';
+let video = null;
+let landmarker = null;
+let latestCorners = null;
+let smCorners = null;
+let persistentHands = null;
+let lastHandsTime = 0;
+let isTrackingBusy = false;
+let portalAlpha = 0;
+let trackLatency = 0;
+let gpuRenderer = null;
+let frames = 0;
+let fps = 0;
+let fpsT0 = performance.now();
+let lowFpsVotes = 0;
+let highFpsVotes = 0;
+let renderScale = 1.0;
+let currentStyle = 1; // 0 Cinematic Green, 1 B&W Noir
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordStream = null;
+let recordMimeType = '';
+let recordExt = 'webm';
+
+function createFreshCanvas() {
+  const wrap = $('#wrap');
+  wrap.innerHTML = '';
+  const cv = document.createElement('canvas');
+  cv.id = 'cv';
+  wrap.appendChild(cv);
+  return cv;
+}
+
+function updateModeUI() {
+  const label = $('#mode-label');
+  const dot = $('#mode-dot');
+  if (!label || !dot) return;
+  if (currentStyle === 0) {
+    label.textContent = 'CINEMATIC GREEN';
+    dot.style.background = '#9fd3ad';
+    dot.style.boxShadow = '0 0 12px rgba(159,211,173,.55)';
+  } else {
+    label.textContent = 'B&W NOIR';
+    dot.style.background = '#d9d9d9';
+    dot.style.boxShadow = '0 0 12px rgba(255,255,255,.32)';
+  }
+}
+
+function updateRecordUI() {
+  const btn = $('#btn-record');
+  if (!btn) return;
+  const recording = !!mediaRecorder && mediaRecorder.state === 'recording';
+  btn.textContent = recording ? '■' : '●';
+  btn.classList.toggle('recording', recording);
+  btn.title = recording ? 'Stop recording' : 'Start recording';
+  btn.setAttribute('aria-label', recording ? 'Stop recording' : 'Start recording');
+}
+
+function getRecordingConfig() {
+  const candidates = [
+    ['video/webm;codecs=vp9,opus', 'webm'],
+    ['video/webm;codecs=vp8,opus', 'webm'],
+    ['video/webm', 'webm'],
+    ['video/mp4', 'mp4']
+  ];
+  if (!window.MediaRecorder) return { mimeType: '', ext: 'webm' };
+  for (const [mimeType, ext] of candidates) {
+    if (!MediaRecorder.isTypeSupported || MediaRecorder.isTypeSupported(mimeType)) {
+      return { mimeType, ext };
+    }
+  }
+  return { mimeType: '', ext: 'webm' };
+}
+
+function startRecording() {
+  const canvas = $('#cv');
+  if (!canvas || !canvas.captureStream || !window.MediaRecorder) {
+    setErr('Video recording is not supported in this browser.');
+    return;
+  }
+  const { mimeType, ext } = getRecordingConfig();
+  recordMimeType = mimeType;
+  recordExt = ext;
+  recordStream = canvas.captureStream(30);
+  recordedChunks = [];
+  mediaRecorder = new MediaRecorder(recordStream, mimeType ? { mimeType } : undefined);
+  mediaRecorder.ondataavailable = ev => {
+    if (ev.data && ev.data.size) recordedChunks.push(ev.data);
+  };
+  mediaRecorder.onerror = ev => {
+    console.error(ev.error || ev);
+    setErr('Recording failed.');
+    updateRecordUI();
+  };
+  mediaRecorder.onstop = () => {
+    try {
+      const blobType = mediaRecorder?.mimeType || recordMimeType || 'video/webm';
+      const blob = new Blob(recordedChunks, { type: blobType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `handframe-${currentStyle === 0 ? 'cinematic-green' : 'bw-noir'}-${Date.now()}.${recordExt}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      $('#hud-status').textContent = 'Recording saved';
+    } finally {
+      recordedChunks = [];
+      if (recordStream) {
+        recordStream.getTracks().forEach(t => t.stop());
+        recordStream = null;
+      }
+      mediaRecorder = null;
+      updateRecordUI();
+    }
+  };
+  mediaRecorder.start(250);
+  $('#hud-status').textContent = 'Recording… tap again to stop';
+  updateRecordUI();
+}
+
+function toggleRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+  else startRecording();
+}
+
+function sizeCanvas(canvas = $('#cv')) {
+  if (!canvas || !video?.videoWidth) return;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  const fit = Math.min(window.innerWidth / vw, window.innerHeight / vh);
+  const cssW = Math.max(1, Math.round(vw * fit));
+  const cssH = Math.max(1, Math.round(vh * fit));
+
+  const mobile = matchMedia('(pointer: coarse)').matches;
+  const dprCap = mobile ? 1.25 : 1.5;
+  const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+  let iw = Math.max(2, Math.round(cssW * dpr * renderScale));
+  let ih = Math.max(2, Math.round(cssH * dpr * renderScale));
+
+  // Bound shader cost on very large / high-DPI screens.
+  const maxPixels = mobile ? 1_250_000 : 2_050_000;
+  const px = iw * ih;
+  if (px > maxPixels) {
+    const s = Math.sqrt(maxPixels / px);
+    iw = Math.max(2, Math.round(iw * s));
+    ih = Math.max(2, Math.round(ih * s));
+  }
+
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  if (canvas.width !== iw) canvas.width = iw;
+  if (canvas.height !== ih) canvas.height = ih;
+}
+
+async function setupCamera() {
+  if (video?.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+  video = $('#video');
+
+  const portrait = window.innerHeight > window.innerWidth;
+  const constraints = {
+    video: {
+      facingMode,
+      width: { ideal: portrait ? 720 : 1280 },
+      height: { ideal: portrait ? 1280 : 720 },
+      frameRate: { ideal: 60, min: 30 }
+    },
+    audio: false
+  };
+
+  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  video.srcObject = stream;
+  await video.play();
+  await new Promise(resolve => {
+    if (video.readyState >= 2 && video.videoWidth) resolve();
+    else video.onloadeddata = () => resolve();
+  });
+}
+
+async function initTracker() {
+  $('#hud-status').textContent = 'Loading hand tracking…';
+  // Intentionally keep the proven tracker/version from your accurate v2.2 implementation.
+  const { FilesetResolver, HandLandmarker } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  landmarker = await HandLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+      delegate: 'GPU'
+    },
+    runningMode: 'VIDEO',
+    numHands: 2,
+    minHandDetectionConfidence: 0.45,
+    minHandPresenceConfidence: 0.45,
+    minTrackingConfidence: 0.45
+  });
+}
+
+function scheduleTrackingLoop() {
+  const step = () => {
+    if (video && video.readyState >= 2 && landmarker && !isTrackingBusy) runHandDetection();
+    if (video && 'requestVideoFrameCallback' in video) video.requestVideoFrameCallback(step);
+    else setTimeout(step, 20);
+  };
+  if (video && 'requestVideoFrameCallback' in video) video.requestVideoFrameCallback(step);
+  else setTimeout(step, 20);
+}
+
+function distSq(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return dx * dx + dy * dy;
+}
+
+function runHandDetection() {
+  isTrackingBusy = true;
+  const t0 = performance.now();
+  let results;
+  try {
+    results = landmarker.detectForVideo(video, t0);
+  } catch {
+    isTrackingBusy = false;
+    return;
+  }
+  trackLatency = trackLatency * 0.85 + (performance.now() - t0) * 0.15;
+
+  const hands = results?.landmarks;
+  if (hands && hands.length >= 2) {
+    const isMirrored = facingMode === 'user';
+    const mapX = x => isMirrored ? 1 - x : x;
+
+    const curHand0 = {
+      wrist: { x: mapX(hands[0][WRIST].x), y: hands[0][WRIST].y },
+      idx:   { x: mapX(hands[0][IDX_TIP].x), y: hands[0][IDX_TIP].y },
+      thb:   { x: mapX(hands[0][THUMB_TIP].x), y: hands[0][THUMB_TIP].y }
+    };
+    const curHand1 = {
+      wrist: { x: mapX(hands[1][WRIST].x), y: hands[1][WRIST].y },
+      idx:   { x: mapX(hands[1][IDX_TIP].x), y: hands[1][IDX_TIP].y },
+      thb:   { x: mapX(hands[1][THUMB_TIP].x), y: hands[1][THUMB_TIP].y }
+    };
+
+    let hA = curHand0;
+    let hB = curHand1;
+    if (persistentHands) {
+      const costNormal = distSq(curHand0.wrist, persistentHands[0].wrist) + distSq(curHand1.wrist, persistentHands[1].wrist);
+      const costSwapped = distSq(curHand0.wrist, persistentHands[1].wrist) + distSq(curHand1.wrist, persistentHands[0].wrist);
+      if (costSwapped < costNormal) {
+        hA = curHand1;
+        hB = curHand0;
+      }
+    } else if (curHand1.wrist.x < curHand0.wrist.x) {
+      hA = curHand1;
+      hB = curHand0;
+    }
+    persistentHands = [hA, hB];
+
+    // Keep the exact proven corner order / hand identity logic.
+    latestCorners = [
+      { x: hA.idx.x, y: hA.idx.y },
+      { x: hA.thb.x, y: hA.thb.y },
+      { x: hB.idx.x, y: hB.idx.y },
+      { x: hB.thb.x, y: hB.thb.y }
+    ];
+    lastHandsTime = performance.now();
+  } else {
+    latestCorners = null;
+    if (performance.now() - lastHandsTime > 1000) persistentHands = null;
+  }
+  isTrackingBusy = false;
+}
+
+class WebGPURenderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.device = null;
+    this.ctx = null;
+    this.pipeline = null;
+    this.bindLayout = null;
+    this.sampler = null;
+    this.uBuf = null;
+  }
+
+  static isSupported() { return !!navigator.gpu; }
+
+  async init() {
+    let adapter = null;
+    try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch {}
+    if (!adapter) adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) throw new Error('WebGPU adapter not found.');
+
+    this.device = await adapter.requestDevice();
+    this.ctx = this.canvas.getContext('webgpu');
+    if (!this.ctx) throw new Error('Could not acquire WebGPU canvas context.');
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    this.ctx.configure({ device: this.device, format, alphaMode: 'opaque' });
+
+    const wgsl = `
+struct Params {
+  p0: vec2f,
+  p1: vec2f,
+  p2: vec2f,
+  p3: vec2f,
+  res: vec2f,
+  time: f32,
+  enable: f32,
+  portalAlpha: f32,
+  isMirrored: f32,
+  styleMode: f32,
+  _pad0: f32,
+};
+
+@group(0) @binding(0) var<uniform> params: Params;
+@group(0) @binding(1) var cam: texture_external;
+@group(0) @binding(2) var samp: sampler;
+
+fn sampleCam(uv: vec2f) -> vec3f {
+  var p = clamp(uv, vec2f(0.0), vec2f(1.0));
+  if (params.isMirrored > 0.5) { p.x = 1.0 - p.x; }
+  return textureSampleBaseClampToEdge(cam, samp, p).rgb;
+}
+
+fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
+
+fn hash21(p: vec2f) -> f32 {
+  let h = dot(p, vec2f(127.1, 311.7));
+  return fract(sin(h) * 43758.5453123);
+}
+
+fn sdSeg(p: vec2f, a: vec2f, b: vec2f) -> f32 {
+  let pa = p - a;
+  let ba = b - a;
+  let h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-9), 0.0, 1.0);
+  return length(pa - ba * h);
+}
+
+fn insidePortal(p: vec2f) -> bool {
+  var inside = false;
+  let pts = array<vec2f, 4>(params.p0, params.p1, params.p2, params.p3);
+  for (var i = 0u; i < 4u; i++) {
+    let a = pts[i];
+    let b = pts[(i + 1u) % 4u];
+    if ((a.y > p.y) != (b.y > p.y)) {
+      let xint = (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x;
+      if (p.x < xint) { inside = !inside; }
+    }
+  }
+  return inside;
+}
+
+fn blur9(uv: vec2f, radiusPx: f32) -> vec3f {
+  let px = vec2f(radiusPx / params.res.x, radiusPx / params.res.y);
+  var s = sampleCam(uv) * 0.20;
+  s += sampleCam(uv + vec2f( px.x, 0.0)) * 0.12;
+  s += sampleCam(uv + vec2f(-px.x, 0.0)) * 0.12;
+  s += sampleCam(uv + vec2f(0.0,  px.y)) * 0.12;
+  s += sampleCam(uv + vec2f(0.0, -px.y)) * 0.12;
+  s += sampleCam(uv + vec2f( px.x,  px.y)) * 0.08;
+  s += sampleCam(uv + vec2f(-px.x,  px.y)) * 0.08;
+  s += sampleCam(uv + vec2f( px.x, -px.y)) * 0.08;
+  s += sampleCam(uv + vec2f(-px.x, -px.y)) * 0.08;
+  return s;
+}
+
+fn skinMask(c: vec3f) -> f32 {
+  let cb = -0.168736*c.r - 0.331264*c.g + 0.5*c.b + 0.5;
+  let cr =  0.5*c.r - 0.418688*c.g - 0.081312*c.b + 0.5;
+  let cbBand = smoothstep(0.29, 0.34, cb) * (1.0 - smoothstep(0.52, 0.58, cb));
+  let crBand = smoothstep(0.50, 0.55, cr) * (1.0 - smoothstep(0.72, 0.78, cr));
+  let lum = smoothstep(0.08, 0.22, luma(c)) * (1.0 - smoothstep(0.94, 1.0, luma(c)));
+  return clamp(cbBand * crBand * lum, 0.0, 1.0);
+}
+
+fn filmicCurve(x: vec3f) -> vec3f {
+  // Smooth shoulder and toe; intentionally less aggressive than full ACES.
+  let a = 2.20;
+  let b = 0.030;
+  let c = 2.05;
+  let d = 0.58;
+  let e = 0.14;
+  return clamp((x * (a * x + vec3f(b))) / (x * (c * x + vec3f(d)) + vec3f(e)), vec3f(0.0), vec3f(1.0));
+}
+
+fn bwNoir(uv: vec2f, raw: vec3f) -> vec3f {
+  let blur = blur9(uv, 4.4);
+  let y = dot(raw, vec3f(0.24, 0.68, 0.08));
+  let by = dot(blur, vec3f(0.24, 0.68, 0.08));
+
+  // Strong monochrome separation with a deep toe and soft shoulder.
+  var mono = smoothstep(0.035, 0.96, y);
+  mono = pow(mono, 0.88);
+  mono = clamp((mono - 0.48) * 1.34 + 0.48, 0.0, 1.0);
+
+  // Dodge highlights slightly using blurred luminance for a classic film feel.
+  let bloom = max(by - 0.62, 0.0);
+  mono += bloom * 0.10;
+
+  // Fine film grain, stronger in shadows.
+  let frame = floor(params.time * 24.0);
+  let n = hash21(floor(uv * params.res) + vec2f(frame * 17.0, frame * 29.0)) - 0.5;
+  let grain = (0.010 + 0.010 * (1.0 - mono)) * n;
+  mono += grain;
+
+  // Gentle cool-black / warm-white split to avoid flat digital grayscale.
+  let shadows = 1.0 - smoothstep(0.15, 0.55, mono);
+  let highs = smoothstep(0.62, 0.96, mono);
+  var col = vec3f(mono);
+  col += vec3f(-0.010, 0.000, 0.012) * shadows;
+  col += vec3f(0.014, 0.009, 0.000) * highs;
+
+  return clamp(col, vec3f(0.0), vec3f(1.0));
+}
+
+fn cinematicGreen(uv: vec2f, raw: vec3f) -> vec3f {
+  let y = luma(raw);
+  let skin = skinMask(raw);
+
+  // Film-density masks. The green/teal lives mostly in shadows and lower mids;
+  // skin/highlights remain warm so the result reads as a movie grade, not a tint.
+  let shadows = 1.0 - smoothstep(0.16, 0.50, y);
+  let lowMids = smoothstep(0.08, 0.30, y) * (1.0 - smoothstep(0.52, 0.76, y));
+  let highs = smoothstep(0.58, 0.95, y);
+
+  // Slightly restrained source saturation before split toning.
+  var col = mix(vec3f(y), raw, 0.88);
+
+  // Strong cinematic green/teal density in darks, with skin protection.
+  let nonSkin = 1.0 - skin * 0.92;
+  col += vec3f(-0.085, 0.055, 0.038) * shadows * nonSkin;
+  col += vec3f(-0.042, 0.032, 0.008) * lowMids * (1.0 - skin * 0.82);
+
+  // Warm, healthy skin and highlights against the green shadows.
+  col += vec3f(0.055, 0.014, -0.020) * skin;
+  col += vec3f(0.036, 0.014, -0.018) * highs;
+
+  // Film-style contrast: deeper toe, controlled mids, soft highlight shoulder.
+  col = (col - vec3f(0.43)) * 1.22 + vec3f(0.43);
+  col = max(col - vec3f(0.012), vec3f(0.0));
+  col = filmicCurve(col * 1.08);
+
+  // Reinforce the signature grade after the curve so it survives bright webcams.
+  let py = luma(col);
+  let deep = 1.0 - smoothstep(0.15, 0.50, py);
+  let mid = smoothstep(0.14, 0.38, py) * (1.0 - smoothstep(0.56, 0.80, py));
+  col = mix(col, col * vec3f(0.78, 1.075, 1.015), deep * (1.0 - skin * 0.90));
+  col = mix(col, col * vec3f(0.90, 1.045, 0.965), mid * (1.0 - skin * 0.82));
+
+  // Warm highlight roll-off keeps whites/skin from looking chemically green.
+  let hi2 = smoothstep(0.62, 0.96, py);
+  col += vec3f(0.030, 0.010, -0.012) * hi2;
+  let postY = luma(col);
+  col = mix(col, vec3f(postY), hi2 * 0.10);
+
+  // Subtle highlight bloom + warm halation around bright edges.
+  let blur = blur9(uv, 5.4);
+  let by = luma(blur);
+  let hot = smoothstep(0.56, 0.92, by);
+  let halo = max(blur - raw, vec3f(0.0));
+  col += halo * vec3f(0.55, 0.19, 0.045) * (0.24 * hot);
+  col += max(blur - vec3f(0.72), vec3f(0.0)) * 0.060;
+
+  // Very fine 24fps film grain; visible mostly in the darker tonal range.
+  let frame = floor(params.time * 24.0);
+  let n = hash21(floor(uv * params.res) + vec2f(frame * 19.0, frame * 37.0)) - 0.5;
+  let grainAmt = (0.007 + 0.008 * shadows) * (1.0 - skin * 0.45);
+  col += vec3f(n * grainAmt);
+
+  // Gentle vignette centered on the moving portal itself, not the screen.
+  let center = (params.p0 + params.p1 + params.p2 + params.p3) * 0.25;
+  let aspect = params.res.x / max(params.res.y, 1.0);
+  let dv = vec2f((uv.x - center.x) * aspect, uv.y - center.y);
+  let vignette = smoothstep(0.25, 0.62, length(dv));
+  col *= 1.0 - vignette * 0.085;
+
+  return clamp(col, vec3f(0.0), vec3f(1.0));
+}
+
+@vertex fn vs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
+  var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+  return vec4f(p[vi], 0.0, 1.0);
+}
+
+@fragment fn fs(@builtin(position) fragPos: vec4f) -> @location(0) vec4f {
+  let uv = fragPos.xy / params.res;
+  let raw = sampleCam(uv);
+  var outCol = raw;
+
+  if (params.enable > 0.01 && params.portalAlpha > 0.01) {
+    let pts = array<vec2f, 4>(params.p0, params.p1, params.p2, params.p3);
+    var d = 1e9;
+    for (var i = 0u; i < 4u; i++) {
+      d = min(d, sdSeg(uv, pts[i], pts[(i + 1u) % 4u]));
+    }
+
+    if (insidePortal(uv)) {
+      var styled = raw;
+      if (params.styleMode > 0.5) {
+        styled = bwNoir(uv, raw);
+      } else {
+        styled = cinematicGreen(uv, raw);
+      }
+      outCol = mix(raw, styled, params.portalAlpha);
+    }
+
+    let px = 1.0 / max(min(params.res.x, params.res.y), 1.0);
+    let core = 1.0 - smoothstep(0.45 * px, 1.55 * px, d);
+    let haze = 1.0 - smoothstep(1.0 * px, 7.0 * px, d);
+    let rim = select(vec3f(0.84, 0.96, 0.86), vec3f(0.92, 0.92, 0.92), params.styleMode > 0.5);
+    outCol += rim * (core * 0.42 + haze * 0.055) * params.portalAlpha;
+  }
+
+  return vec4f(clamp(outCol, vec3f(0.0), vec3f(1.0)), 1.0);
+}`;
+
+    const module = this.device.createShaderModule({ code: wgsl });
+    if (module.getCompilationInfo) {
+      const info = await module.getCompilationInfo();
+      const errors = info.messages.filter(m => m.type === 'error');
+      if (errors.length) throw new Error('WGSL compile error: ' + errors.map(e => e.message).join(' | '));
+    }
+
+    this.bindLayout = this.device.createBindGroupLayout({
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+        { binding: 1, visibility: GPUShaderStage.FRAGMENT, externalTexture: {} },
+        { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } }
+      ]
+    });
+    const pipelineLayout = this.device.createPipelineLayout({ bindGroupLayouts: [this.bindLayout] });
+    this.pipeline = this.device.createRenderPipeline({
+      layout: pipelineLayout,
+      vertex: { module, entryPoint: 'vs' },
+      fragment: { module, entryPoint: 'fs', targets: [{ format }] },
+      primitive: { topology: 'triangle-list' }
+    });
+    this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+    this.uBuf = this.device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  }
+
+  render(corners, time, haveHands, alpha) {
+    const u = new Float32Array(16);
+    if (corners) {
+      for (let i = 0; i < 4; i++) {
+        u[i * 2] = corners[i].x;
+        u[i * 2 + 1] = corners[i].y;
+      }
+    }
+    u[8] = this.canvas.width;
+    u[9] = this.canvas.height;
+    u[10] = time;
+    u[11] = haveHands ? 1 : 0;
+    u[12] = alpha;
+    u[13] = facingMode === 'user' ? 1 : 0;
+    u[14] = currentStyle;
+    u[15] = 0;
+    this.device.queue.writeBuffer(this.uBuf, 0, u);
+
+    const extTex = this.device.importExternalTexture({ source: video });
+    const bindGroup = this.device.createBindGroup({
+      layout: this.bindLayout,
+      entries: [
+        { binding: 0, resource: { buffer: this.uBuf } },
+        { binding: 1, resource: extTex },
+        { binding: 2, resource: this.sampler }
+      ]
+    });
+
+    const encoder = this.device.createCommandEncoder();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view: this.ctx.getCurrentTexture().createView(),
+        loadOp: 'clear', clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: 'store'
+      }]
+    });
+    pass.setPipeline(this.pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(3);
+    pass.end();
+    this.device.queue.submit([encoder.finish()]);
+  }
+}
+
+class WebGL2Renderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.gl = null;
+    this.program = null;
+    this.texture = null;
+    this.vao = null;
+    this.locs = {};
+  }
+
+  static isSupported() {
+    try {
+      const c = document.createElement('canvas');
+      return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
+    } catch { return false; }
+  }
+
+  init() {
+    const gl = this.canvas.getContext('webgl2', { alpha: false, antialias: false, powerPreference: 'high-performance' });
+    if (!gl) throw new Error('WebGL2 context unavailable.');
+    this.gl = gl;
+
+    const vsSrc = `#version 300 es
+    out vec2 vUV;
+    void main() {
+      vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+      vUV = p;
+      gl_Position = vec4(p.x * 2.0 - 1.0, 1.0 - p.y * 2.0, 0.0, 1.0);
+    }`;
+
+    const fsSrc = `#version 300 es
+    precision highp float;
+    in vec2 vUV;
+    out vec4 fragColor;
+    uniform sampler2D uCam;
+    uniform vec2 uP0, uP1, uP2, uP3;
+    uniform vec2 uRes;
+    uniform float uTime;
+    uniform float uEnable;
+    uniform float uPortalAlpha;
+    uniform float uIsMirrored;
+    uniform float uStyleMode;
+
+    vec3 sampleCam(vec2 uv) {
+      vec2 p = clamp(uv, vec2(0.0), vec2(1.0));
+      if (uIsMirrored > 0.5) p.x = 1.0 - p.x;
+      return texture(uCam, p).rgb;
+    }
+    float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+    float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+
+    float sdSeg(vec2 p, vec2 a, vec2 b) {
+      vec2 pa = p - a, ba = b - a;
+      float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-9), 0.0, 1.0);
+      return length(pa - ba * h);
+    }
+
+    bool insidePortal(vec2 p) {
+      bool inside = false;
+      vec2 pts[4] = vec2[4](uP0, uP1, uP2, uP3);
+      for (int i = 0; i < 4; i++) {
+        vec2 a = pts[i], b = pts[(i + 1) % 4];
+        if ((a.y > p.y) != (b.y > p.y)) {
+          float xint = (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x;
+          if (p.x < xint) inside = !inside;
+        }
+      }
+      return inside;
+    }
+
+    vec3 blur9(vec2 uv, float radiusPx) {
+      vec2 px = vec2(radiusPx / uRes.x, radiusPx / uRes.y);
+      vec3 s = sampleCam(uv) * 0.20;
+      s += sampleCam(uv + vec2( px.x, 0.0)) * 0.12;
+      s += sampleCam(uv + vec2(-px.x, 0.0)) * 0.12;
+      s += sampleCam(uv + vec2(0.0,  px.y)) * 0.12;
+      s += sampleCam(uv + vec2(0.0, -px.y)) * 0.12;
+      s += sampleCam(uv + vec2( px.x,  px.y)) * 0.08;
+      s += sampleCam(uv + vec2(-px.x,  px.y)) * 0.08;
+      s += sampleCam(uv + vec2( px.x, -px.y)) * 0.08;
+      s += sampleCam(uv + vec2(-px.x, -px.y)) * 0.08;
+      return s;
+    }
+
+    float skinMask(vec3 c) {
+      float cb = -0.168736*c.r - 0.331264*c.g + 0.5*c.b + 0.5;
+      float cr =  0.5*c.r - 0.418688*c.g - 0.081312*c.b + 0.5;
+      float cbBand = smoothstep(0.29, 0.34, cb) * (1.0 - smoothstep(0.52, 0.58, cb));
+      float crBand = smoothstep(0.50, 0.55, cr) * (1.0 - smoothstep(0.72, 0.78, cr));
+      float y = luma(c);
+      float lum = smoothstep(0.08, 0.22, y) * (1.0 - smoothstep(0.94, 1.0, y));
+      return clamp(cbBand * crBand * lum, 0.0, 1.0);
+    }
+
+    vec3 filmicCurve(vec3 x) {
+      const float a = 2.20, b = 0.030, c = 2.05, d = 0.58, e = 0.14;
+      return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+    }
+
+    vec3 bwNoir(vec2 uv, vec3 raw) {
+      vec3 blur = blur9(uv, 4.4);
+      float y = dot(raw, vec3(0.24, 0.68, 0.08));
+      float by = dot(blur, vec3(0.24, 0.68, 0.08));
+
+      float mono = smoothstep(0.035, 0.96, y);
+      mono = pow(mono, 0.88);
+      mono = clamp((mono - 0.48) * 1.34 + 0.48, 0.0, 1.0);
+      mono += max(by - 0.62, 0.0) * 0.10;
+
+      float frame = floor(uTime * 24.0);
+      float n = hash21(floor(uv * uRes) + vec2(frame * 17.0, frame * 29.0)) - 0.5;
+      mono += (0.010 + 0.010 * (1.0 - mono)) * n;
+
+      float shadows = 1.0 - smoothstep(0.15, 0.55, mono);
+      float highs = smoothstep(0.62, 0.96, mono);
+      vec3 col = vec3(mono);
+      col += vec3(-0.010, 0.000, 0.012) * shadows;
+      col += vec3(0.014, 0.009, 0.000) * highs;
+      return clamp(col, 0.0, 1.0);
+    }
+
+    vec3 cinematicGreen(vec2 uv, vec3 raw) {
+      float y = luma(raw);
+      float skin = skinMask(raw);
+
+      float shadows = 1.0 - smoothstep(0.16, 0.50, y);
+      float lowMids = smoothstep(0.08, 0.30, y) * (1.0 - smoothstep(0.52, 0.76, y));
+      float highs = smoothstep(0.58, 0.95, y);
+
+      vec3 col = mix(vec3(y), raw, 0.88);
+      float nonSkin = 1.0 - skin * 0.92;
+      col += vec3(-0.085, 0.055, 0.038) * shadows * nonSkin;
+      col += vec3(-0.042, 0.032, 0.008) * lowMids * (1.0 - skin * 0.82);
+
+      col += vec3(0.055, 0.014, -0.020) * skin;
+      col += vec3(0.036, 0.014, -0.018) * highs;
+
+      col = (col - 0.43) * 1.22 + 0.43;
+      col = max(col - 0.012, vec3(0.0));
+      col = filmicCurve(col * 1.08);
+
+      float py = luma(col);
+      float deep = 1.0 - smoothstep(0.15, 0.50, py);
+      float mid = smoothstep(0.14, 0.38, py) * (1.0 - smoothstep(0.56, 0.80, py));
+      col = mix(col, col * vec3(0.78, 1.075, 1.015), deep * (1.0 - skin * 0.90));
+      col = mix(col, col * vec3(0.90, 1.045, 0.965), mid * (1.0 - skin * 0.82));
+
+      float hi2 = smoothstep(0.62, 0.96, py);
+      col += vec3(0.030, 0.010, -0.012) * hi2;
+      float postY = luma(col);
+      col = mix(col, vec3(postY), hi2 * 0.10);
+
+      vec3 blur = blur9(uv, 5.4);
+      float by = luma(blur);
+      float hot = smoothstep(0.56, 0.92, by);
+      vec3 halo = max(blur - raw, vec3(0.0));
+      col += halo * vec3(0.55, 0.19, 0.045) * (0.24 * hot);
+      col += max(blur - vec3(0.72), vec3(0.0)) * 0.060;
+
+      float frame = floor(uTime * 24.0);
+      float n = hash21(floor(uv * uRes) + vec2(frame * 19.0, frame * 37.0)) - 0.5;
+      float grainAmt = (0.007 + 0.008 * shadows) * (1.0 - skin * 0.45);
+      col += vec3(n * grainAmt);
+
+      vec2 center = (uP0 + uP1 + uP2 + uP3) * 0.25;
+      float aspect = uRes.x / max(uRes.y, 1.0);
+      vec2 dv = vec2((uv.x - center.x) * aspect, uv.y - center.y);
+      float vignette = smoothstep(0.25, 0.62, length(dv));
+      col *= 1.0 - vignette * 0.085;
+
+      return clamp(col, 0.0, 1.0);
+    }
+
+    void main() {
+      vec2 uv = vUV;
+      vec3 raw = sampleCam(uv);
+      vec3 outCol = raw;
+      if (uEnable > 0.01 && uPortalAlpha > 0.01) {
+        vec2 pts[4] = vec2[4](uP0, uP1, uP2, uP3);
+        float d = 1e9;
+        for (int i = 0; i < 4; i++) d = min(d, sdSeg(uv, pts[i], pts[(i + 1) % 4]));
+
+        if (insidePortal(uv)) {
+          vec3 styled = (uStyleMode < 0.5) ? cinematicGreen(uv, raw) : bwNoir(uv, raw);
+          outCol = mix(raw, styled, uPortalAlpha);
+        }
+
+        float px = 1.0 / max(min(uRes.x, uRes.y), 1.0);
+        float core = 1.0 - smoothstep(0.45 * px, 1.55 * px, d);
+        float haze = 1.0 - smoothstep(1.0 * px, 7.0 * px, d);
+        vec3 rim = (uStyleMode < 0.5) ? vec3(0.84, 0.96, 0.86) : vec3(0.92, 0.92, 0.92);
+        outCol += rim * (core * 0.42 + haze * 0.055) * uPortalAlpha;
+      }
+      fragColor = vec4(clamp(outCol, 0.0, 1.0), 1.0);
+    }`;
+
+    const compile = (type, src) => {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || 'Shader compilation failed');
+      return s;
+    };
+    const vs = compile(gl.VERTEX_SHADER, vsSrc);
+    const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+    this.program = gl.createProgram();
+    gl.attachShader(this.program, vs);
+    gl.attachShader(this.program, fs);
+    gl.linkProgram(this.program);
+    if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(this.program) || 'Program link failed');
+
+    for (const name of ['uCam','uP0','uP1','uP2','uP3','uRes','uTime','uEnable','uPortalAlpha','uIsMirrored','uStyleMode']) {
+      this.locs[name] = gl.getUniformLocation(this.program, name);
+    }
+
+    this.vao = gl.createVertexArray();
+    this.texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  }
+
+  render(corners, time, haveHands, alpha) {
+    const gl = this.gl;
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.useProgram(this.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+    gl.uniform1i(this.locs.uCam, 0);
+
+    if (corners) {
+      gl.uniform2f(this.locs.uP0, corners[0].x, corners[0].y);
+      gl.uniform2f(this.locs.uP1, corners[1].x, corners[1].y);
+      gl.uniform2f(this.locs.uP2, corners[2].x, corners[2].y);
+      gl.uniform2f(this.locs.uP3, corners[3].x, corners[3].y);
+    }
+
+    gl.uniform2f(this.locs.uRes, this.canvas.width, this.canvas.height);
+    gl.uniform1f(this.locs.uTime, time);
+    gl.uniform1f(this.locs.uEnable, haveHands ? 1 : 0);
+    gl.uniform1f(this.locs.uPortalAlpha, alpha);
+    gl.uniform1f(this.locs.uIsMirrored, facingMode === 'user' ? 1 : 0);
+    gl.uniform1f(this.locs.uStyleMode, currentStyle);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+}
+
+function adaptRenderQuality() {
+  if (fps > 0 && fps < 42) {
+    lowFpsVotes++;
+    highFpsVotes = 0;
+  } else if (fps >= 57) {
+    highFpsVotes++;
+    lowFpsVotes = Math.max(0, lowFpsVotes - 1);
+  } else {
+    lowFpsVotes = Math.max(0, lowFpsVotes - 1);
+    highFpsVotes = 0;
+  }
+
+  if (lowFpsVotes >= 3 && renderScale > CFG.minRenderScale) {
+    renderScale = Math.max(CFG.minRenderScale, renderScale * 0.84);
+    lowFpsVotes = 0;
+    sizeCanvas();
+  } else if (highFpsVotes >= 8 && renderScale < CFG.maxRenderScale) {
+    renderScale = Math.min(CFG.maxRenderScale, renderScale + 0.08);
+    highFpsVotes = 0;
+    sizeCanvas();
+  }
+}
+
+function mainRenderLoop(t) {
+  requestAnimationFrame(mainRenderLoop);
+  frames++;
+  if (t - fpsT0 > 700) {
+    fps = Math.round((frames * 1000) / (t - fpsT0));
+    frames = 0;
+    fpsT0 = t;
+    $('#hud-fps').textContent = `${fps} FPS`;
+    adaptRenderQuality();
+  }
+
+  const now = performance.now();
+  const haveHands = !!latestCorners && (now - lastHandsTime < CFG.handsTimeout);
+  portalAlpha = haveHands ? Math.min(1, portalAlpha + 0.08) : Math.max(0, portalAlpha - 0.06);
+
+  if (haveHands) {
+    if (!smCorners) smCorners = latestCorners.map(p => ({ ...p }));
+    else {
+      for (let i = 0; i < 4; i++) {
+        smCorners[i].x += (latestCorners[i].x - smCorners[i].x) * CFG.smoothAlpha;
+        smCorners[i].y += (latestCorners[i].y - smCorners[i].y) * CFG.smoothAlpha;
+      }
+    }
+  }
+
+  gpuRenderer?.render(smCorners, t / 1000, haveHands, portalAlpha);
+  $('#hud-status').textContent = haveHands
+    ? `${currentStyle === 0 ? 'Cinematic Green' : 'B&W Noir'} · ${trackLatency.toFixed(1)} ms tracking`
+    : 'Show both hands';
+}
+
+async function startApp() {
+  $('#btn-start').disabled = true;
+  setErr('');
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Camera access needs HTTPS or localhost.');
+    }
+
+    $('#hud-status').textContent = 'Opening camera…';
+    await setupCamera();
+
+    let canvas = createFreshCanvas();
+    sizeCanvas(canvas);
+
+    let webgpuError = null;
+    if (WebGPURenderer.isSupported()) {
+      try {
+        $('#hud-status').textContent = 'Starting WebGPU…';
+        gpuRenderer = new WebGPURenderer(canvas);
+        await gpuRenderer.init();
+        activeBackend = 'webgpu';
+        $('#backend-badge').textContent = 'WEBGPU';
+      } catch (err) {
+        console.warn('WebGPU failed; falling back to WebGL2', err);
+        webgpuError = err;
+        gpuRenderer = null;
+      }
+    }
+
+    if (!gpuRenderer) {
+      if (!WebGL2Renderer.isSupported()) {
+        const detail = webgpuError ? ` WebGPU error: ${webgpuError.message}` : '';
+        throw new Error('This browser exposes neither usable WebGPU nor WebGL2.' + detail);
+      }
+      canvas = createFreshCanvas();
+      sizeCanvas(canvas);
+      gpuRenderer = new WebGL2Renderer(canvas);
+      gpuRenderer.init();
+      activeBackend = 'webgl2';
+      $('#backend-badge').textContent = 'WEBGL2';
+    }
+
+    await initTracker();
+    $('#start').style.display = 'none';
+    $('#controls').style.display = 'flex';
+    updateModeUI();
+    scheduleTrackingLoop();
+    requestAnimationFrame(mainRenderLoop);
+  } catch (err) {
+    console.error(err);
+    setErr(err?.message || String(err));
+    $('#btn-start').disabled = false;
+  }
+}
+
+window.addEventListener('resize', () => sizeCanvas());
+window.addEventListener('orientationchange', () => setTimeout(() => sizeCanvas(), 250));
+
+updateModeUI();
+updateRecordUI();
+
+$('#btn-start').addEventListener('click', startApp);
+
+$('#mode-pill').addEventListener('click', e => {
+  e.stopPropagation();
+  currentStyle = currentStyle === 0 ? 1 : 0;
+  updateModeUI();
+});
+
+$('#btn-camera').addEventListener('click', async e => {
+  e.stopPropagation();
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    setErr('Stop recording before switching camera.');
+    return;
+  }
+  const previous = facingMode;
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
+  $('#hud-status').textContent = 'Switching camera…';
+  try {
+    await setupCamera();
+    persistentHands = null;
+    latestCorners = null;
+    smCorners = null;
+    sizeCanvas();
+  } catch (err) {
+    console.error(err);
+    facingMode = previous;
+    try { await setupCamera(); sizeCanvas(); } catch {}
+  }
+});
+
+$('#btn-record').addEventListener('click', e => {
+  e.stopPropagation();
+  toggleRecording();
+});
+</script>
+</body>
+</html>
